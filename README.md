@@ -23,9 +23,8 @@ Vault file is secured by master-password, which is created at vault.enc creation
 ```
 xclip 
 libsodium-dev 
-libssl-dev 
-libboost-json1.83* 
-libboost-program-options1.83*
+libssl-dev
+libboost-program-options*
 ```
 
 Can be install by / Могут быть установлены запуском:

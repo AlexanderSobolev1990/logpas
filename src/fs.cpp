@@ -36,11 +36,17 @@ bool write_vault(const std::vector<unsigned char>& salt,
 
     flock(fd, LOCK_EX);
 
-    ::write(fd, MAGIC, 7);
-    ::write(fd, salt.data(), salt.size());
-    ::write(fd, nonce.data(), nonce.size());
-    ::write(fd, tag.data(), tag.size());
-    ::write(fd, cipher.data(), cipher.size());
+    
+    if (::write(fd, MAGIC, 7) == -1)
+        throw std::runtime_error("write MAGIC failed");
+    if (::write(fd, salt.data(), salt.size()) == -1)
+        throw std::runtime_error("write salt failed");
+    if (::write(fd, nonce.data(), nonce.size()) == -1)
+        throw std::runtime_error("write nonce failed");
+    if (::write(fd, tag.data(), tag.size()) == -1)
+        throw std::runtime_error("write tag failed");
+    if (::write(fd, cipher.data(), cipher.size()) == -1)
+        throw std::runtime_error("write cipher failed");
 
     fsync(fd);
     fchmod(fd, 0600);
@@ -74,9 +80,12 @@ bool read_vault(std::vector<unsigned char>& salt,
     nonce.resize(12);
     tag.resize(16);
 
-    ::read(fd, salt.data(), 16);
-    ::read(fd, nonce.data(), 12);
-    ::read(fd, tag.data(), 16);
+    if (::read(fd, salt.data(), 16) == -1)
+        throw std::runtime_error("read salt failed");
+    if (::read(fd, nonce.data(), 12) == -1)
+        throw std::runtime_error("read nonce failed");
+    if (::read(fd, tag.data(), 16) == -1)
+        throw std::runtime_error("read tag failed");
 
     char buf[4096];
     int n;

@@ -8,7 +8,7 @@ static void cleanup_handler(int) {
 }
 
 int main(int argc, char** argv) {
-    // sodium_init();
+    //sodium_init();
 
     std::signal(SIGINT, cleanup_handler);
     std::signal(SIGTERM, cleanup_handler);
