@@ -11,6 +11,8 @@
 #include <fstream>
 #include <cstdlib>
 #include <sodium.h>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
 int run_cli(int argc, char** argv) {
     namespace po = boost::program_options;
@@ -19,70 +21,69 @@ int run_cli(int argc, char** argv) {
     desc.add_options()
     (
         "help,h",
-        "Показать справку по всем аргументам"
+        "Show help"
     )
     (
         "add,a",
         po::value<std::vector<std::string>>()->multitoken(),
-        "Добавить запись.\n"
-        "Использование:\n"
-        "  logpas -a <site> <login> <password>\n"
-        "Пример:\n"
-        "  logpas -a github.com mylogin mypassword"
+        "Add new site-login-password.\n"
+        "Usage:\n"
+        "   logpas -a <site> <login> <password>"
     )
     (
         "show,s",
         po::value<std::string>(),
-        "Показать login и password для указанного site.\n"
-        "Использование:\n"
-        "  logpas -s <site>"
+        "Show 'login' and 'password' for specified 'site'.\n"
+        "Usage:\n"
+        "   logpas -s <site>"
     )
     (
         "copy,c",
         po::value<std::string>(),
-        "Скопировать password для указанного site в буфер обмена.\n"
-        "Буфер будет очищен через 60 секунд, если содержимое не изменилось.\n"
-        "Использование:\n"
-        "  logpas -c <site>"
+        "Copy 'password' for specified 'site' to clipboard.\n"
+        "Note: clipboard will be cleared in 60 sec.\n"
+        "Usage:\n"
+        "   logpas -c <site>"
     )
-    (   "search", 
+    (   "search,r", 
         po::value<std::string>(), 
-        "Поиск по site (частичное совпадение)"
+        "Search by 'site' field (partial match)"
     )
     (
-        "delete,d",
+        "delete",
         po::value<std::string>(),
-        "Удалить запись по site.\n"
-        "Использование:\n"
-        "  logpas -d <site>"
+        "DELETE 'site' record.\n"
+        "Usage:\n"
+        "   logpas --delete <site>"
     )
     (
         "update,u",
         po::value<std::vector<std::string>>()->multitoken(),
-        "Обновить login/password для существующего site.\n"
-        "Использование:\n"
-        "  logpas -u <site> <login> <password>"
+        "Update 'login' and 'password' for existing 'site'.\n"
+        "Usage:\n"
+        "   logpas -u <site> <login> <password>"
     )
     (
-        "decrypt",
-        "Расшифровать vault и сохранить JSON-файл в ~/.logpas/vault.json"
+        "decrypt,d",
+        "Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json"
     )
-    (   "encrypt", 
+    (   "encrypt,e", 
         po::value<std::string>(), 
-        "Зашифровать указанный JSON-файл в vault с указанием НОВОГО master-пароля"
+        "Encrypt specified JSON file to ~/.logpas/vault.enc with specifiing new master-password.\n"
+        "WARNING!!! Old vault.enc will be lost!"
     )
     (
-        "all",
-        "Показать все записи в JSON-формате"
+        "all,l",
+        "Show all records from ~/.logpas/vault.enc to terminal"
     )
     (
         "gen,g",
         po::value<int>(),
-        "Сгенерировать пароль указанной длины.\n"
-        "Допустимые символы:\n"
-        "  a-z A-Z 0-9 !@#$%^&*()_-+=\n"
-        "Использование:\n"
-        "  logpas -g <length>"
+        "Generate password of specified length.\n"
+        "Valid characters:\n"
+        "   a-z A-Z 0-9 !@#$%^&*()_-+=\n"
+        "Usage:\n"
+        "   logpas -g <length>"
     );
 
     po::variables_map vm;
@@ -154,12 +155,12 @@ int run_cli(int argc, char** argv) {
         std::vector<unsigned char> nonce;
         std::vector<unsigned char> tag;
 
-        auto cipher = encrypt_data(buffer.str(), key, nonce, tag);
+        auto cipher = encrypt_data(json_data, key, nonce, tag);
 
         write_vault(salt, nonce, tag, cipher);
 
-        sodium_memzero(&pass1[0], pass1.size());
-        sodium_memzero(&pass2[0], pass2.size());
+        if (!pass1.empty()) sodium_memzero(&pass1[0], pass1.size());
+        if (!pass2.empty()) sodium_memzero(&pass2[0], pass2.size());
         sodium_memzero(key.data(), key.size());
         return 0;
     }

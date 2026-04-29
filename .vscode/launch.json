@@ -9,7 +9,7 @@
             // Resolved by CMake Tools:
             "program": "${command:cmake.launchTargetPath}",
             "args": [
-                "--encrypt",
+                "--enc",
                 "vault.json"
             ],
             "stopAtEntry": false,

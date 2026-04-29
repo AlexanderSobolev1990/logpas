@@ -1,24 +1,24 @@
-# LOGPAS - terminal login-password manager / консольный менеджер паролей #
+# LOGPAS - консольный менеджер паролей / terminal login-password manager #
 
 ***
 
-## Program description / Описание программы ##
+## Описание программы / Program description ##
 
-Terminal login-password manager / Консольный менеджер паролей
+Простой консольный менеджер паролей / Simple terminal login-password manager
 
-Suppose you have ubuntu-like distro and has /home dir / Предполагается, что у вас ubuntu-подобный дистрибутив и есть директория /home
+Предполагается, что у вас ubuntu-подобный дистрибутив и есть директория /home / Suppose you have ubuntu-like distro and has /home dir
 
-Passwords are stored in / Хранение паролей организовано в 
+Хранение паролей организовано в зашифрованном файле / Passwords are stored in encrypted file
 
 ```
 home/.logpas/vault.enc
 ```
 
-Vault file is secured by master-password, which is created at vault.enc creation time / Файл с паролями защищен мастер-паролем, создаваемым при создании файла vault.enc
+Файл с паролями защищен мастер-паролем, создаваемым при создании файла vault.enc / Vault file is secured by master-password, which is created at vault.enc creation time
 
 ***
 
-## Build package requirements / Пакеты, требуемые для сборки ##
+## Пакеты, требуемые для сборки / Build package requirements ##
 
 ```
 xclip 
@@ -27,7 +27,7 @@ libssl-dev
 libboost-program-options*
 ```
 
-Can be install by / Могут быть установлены запуском:
+Могут быть установлены запуском / Can be install by launching:
 
 ```
 install_required.sh
@@ -35,37 +35,38 @@ install_required.sh
 
 ***
 
-## Command line arguments / Аргументы запуска приложения ##
+## Аргументы запуска приложения / Command line arguments ##
 
 ```
-  -h [ --help ]         Показать справку по всем аргументам
-  -a [ --add ] arg      Добавить запись.
-                        Использование:
-                          logpas -a <site> <login> <password>
-                        Пример:
-                          logpas -a github.com mylogin mypassword
-  -s [ --show ] arg     Показать login и password для указанного site.
-                        Использование:
-                          logpas -s <site>
-  -c [ --copy ] arg     Скопировать password для указанного site в буфер обмена.
-                        Буфер будет очищен через 60 секунд, если содержимое не изменилось.
-                        Использование:
-                          logpas -c <site>
-  --search arg          Поиск по site (частичное совпадение)
-  -d [ --delete ] arg   Удалить запись по site.
-                        Использование:
-                          logpas -d <site>
-  -u [ --update ] arg   Обновить login/password для существующего site.
-                        Использование:
-                          logpas -u <site> <login> <password>
-  --decrypt             Расшифровать vault и сохранить JSON-файл в ~/.logpas/vault.json
-  --encrypt arg         Зашифровать указанный JSON-файл в vault с указанием НОВОГО master-пароля
-  --all                 Показать все записи в JSON-формате
-  -g [ --gen ] arg      Сгенерировать пароль указанной длины.
-                        Допустимые символы:
-                          a-z A-Z 0-9 !@#$%^&*()_-+=
-                        Использование:
-                          logpas -g <length>
+Options:
+  -h [ --help ]         Show help
+  -a [ --add ] arg      Add new site-login-password.
+                        Usage:
+                           logpas -a <site> <login> <password>
+  -s [ --show ] arg     Show 'login' and 'password' for specified 'site'.
+                        Usage:
+                           logpas -s <site>
+  -c [ --copy ] arg     Copy 'password' for specified 'site' to clipboard.
+                        Note: clipboard will be cleared in 60 sec.
+                        Usage:
+                           logpas -c <site>
+  -r [ --search ] arg   Search by 'site' field (partial match)
+  --delete arg          DELETE 'site' record.
+                        Usage:
+                           logpas --delete <site>
+  -u [ --update ] arg   Update 'login' and 'password' for existing 'site'.
+                        Usage:
+                           logpas -u <site> <login> <password>
+  -d [ --decrypt ]      Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json
+  -e [ --encrypt ] arg  Encrypt specified JSON file to ~/.logpas/vault.enc with specifiing new master-password.
+                        WARNING!!! Old vault.enc will be lost!
+  -l [ --all ]          Show all records from ~/.logpas/vault.enc to terminal
+  -g [ --gen ] arg      Generate password of specified length.
+                        Valid characters:
+                           a-z A-Z 0-9 !@#$%^&*()_-+=
+                        Usage:
+                           logpas -g <length>
+
 ```
 
 ***

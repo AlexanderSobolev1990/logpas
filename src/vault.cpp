@@ -1,41 +1,61 @@
 #include "vault.h"
 #include "crypto.h"
 #include "fs.h"
+
 #include <sstream>
+#include <stdexcept>
+
 #include <sodium.h>
+
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
-#include <sys/stat.h>
-#include <unistd.h>
 
-static bool file_exists(const std::string& path) {
-    struct stat st;
-    return stat(path.c_str(), &st) == 0;
-}
 
 void Vault::add(const Entry& e) {
-    for (auto& x : entries)
-        if (x.site == e.site) throw std::runtime_error("duplicate site");
+    for (const auto& x : entries) {
+        if (x.site == e.site) {
+            throw std::runtime_error("duplicate site");
+        }
+    }
+
     entries.push_back(e);
 }
 
+
 bool Vault::update(const Entry& e) {
-    for (auto& x : entries)
-        if (x.site == e.site) { x = e; return true; }
+    for (auto& x : entries) {
+        if (x.site == e.site) {
+            x = e;
+            return true;
+        }
+    }
+
     return false;
 }
+
 
 bool Vault::remove(const std::string& site) {
-    for (auto it = entries.begin(); it != entries.end(); ++it)
-        if (it->site == site) { entries.erase(it); return true; }
+    for (auto it = entries.begin(); it != entries.end(); ++it) {
+        if (it->site == site) {
+            entries.erase(it);
+            return true;
+        }
+    }
+
     return false;
 }
 
+
 Entry* Vault::find(const std::string& site) {
-    for (auto& e : entries)
-        if (e.site == site) return &e;
+    for (auto& e : entries) {
+        if (e.site == site) {
+            return &e;
+        }
+    }
+
     return nullptr;
 }
+
 
 std::vector<Entry> Vault::search(const std::string& q) const {
     std::vector<Entry> result;
@@ -49,20 +69,23 @@ std::vector<Entry> Vault::search(const std::string& q) const {
     return result;
 }
 
-std::string Vault::dump_json() const {
-    boost::property_tree::ptree root;
-    boost::property_tree::ptree array;
 
+std::string Vault::dump_json() const {
     try {
+        boost::property_tree::ptree root;
+        boost::property_tree::ptree array;
+
         for (const auto& e : entries) {
             if (e.site.empty()) {
-                throw std::runtime_error("empty site field");
+                throw std::runtime_error("empty 'site' field");
             }
+
             if (e.login.empty()) {
-                throw std::runtime_error("empty login field");
+                throw std::runtime_error("empty 'login' field");
             }
+
             if (e.password.empty()) {
-                throw std::runtime_error("empty password field");
+                throw std::runtime_error("empty 'password' field");
             }
 
             boost::property_tree::ptree item;
@@ -78,7 +101,7 @@ std::string Vault::dump_json() const {
 
         std::ostringstream ss;
 
-        boost::property_tree::write_json(ss, root, true); // НЕ компактный формат!
+        boost::property_tree::write_json(ss, root, true);
 
         if (!ss.good()) {
             throw std::runtime_error("json serialization failed");
@@ -93,34 +116,48 @@ std::string Vault::dump_json() const {
     }
 }
 
+
 bool Vault::save(const std::string& password) {
     auto salt = make_salt();
     auto key = derive_key(password, salt);
-    std::vector<unsigned char> nonce, tag;
+
+    std::vector<unsigned char> nonce;
+    std::vector<unsigned char> tag;
+
     std::string plain = dump_json();
+
     auto cipher = encrypt_data(plain, key, nonce, tag);
 
-    sodium_memzero(&plain[0], plain.size());
+    if (!plain.empty()) {
+        sodium_memzero(&plain[0], plain.size());
+    }
+
     sodium_memzero(key.data(), key.size());
 
     return write_vault(salt, nonce, tag, cipher);
 }
 
+
 bool Vault::load(const std::string& password) {
-    std::vector<unsigned char> salt, nonce, tag, cipher;
-    if (!read_vault(salt, nonce, tag, cipher)) return true;
+    std::vector<unsigned char> salt;
+    std::vector<unsigned char> nonce;
+    std::vector<unsigned char> tag;
+    std::vector<unsigned char> cipher;
+
+    if (!read_vault(salt, nonce, tag, cipher)) {
+        entries.clear();
+        return true;
+    }
 
     auto key = derive_key(password, salt);
-    std::string json = decrypt_data(cipher, key, nonce, tag);
-    sodium_memzero(key.data(), key.size());
 
-    entries.clear();
-
-    std::stringstream ss(json);
-
-    boost::property_tree::ptree root;
+    std::string json;
 
     try {
+        json = decrypt_data(cipher, key, nonce, tag);
+
+        sodium_memzero(key.data(), key.size());
+
         std::stringstream ss(json);
 
         boost::property_tree::ptree root;
@@ -136,24 +173,33 @@ bool Vault::load(const std::string& password) {
             e.password = item.second.get<std::string>("password");
 
             if (e.site.empty()) {
-                throw std::runtime_error("empty site field");
+                throw std::runtime_error("empty 'site' field");
             }
+
             if (e.login.empty()) {
-                throw std::runtime_error("empty login field");
+                throw std::runtime_error("empty 'login' field");
             }
+
             if (e.password.empty()) {
-                throw std::runtime_error("empty password field");
+                throw std::runtime_error("empty 'password' field");
             }
 
             entries.push_back(e);
         }
     }
-    catch (const std::exception& e) {
-        throw std::runtime_error(
-            std::string("vault parse failed: ") + e.what()
-        );
+    catch (...) {
+        sodium_memzero(key.data(), key.size());
+
+        if (!json.empty()) {
+            sodium_memzero(&json[0], json.size());
+        }
+
+        throw;
     }
 
-    if (!json.empty()) sodium_memzero(&json[0], json.size());
+    if (!json.empty()) {
+        sodium_memzero(&json[0], json.size());
+    }
+
     return true;
 }
