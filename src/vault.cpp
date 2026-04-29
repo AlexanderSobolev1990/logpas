@@ -29,6 +29,18 @@ Entry* Vault::find(const std::string& site) {
     return nullptr;
 }
 
+std::vector<Entry> Vault::search(const std::string& q) const {
+    std::vector<Entry> result;
+
+    for (const auto& e : entries) {
+        if (e.site.find(q) != std::string::npos) {
+            result.push_back(e);
+        }
+    }
+
+    return result;
+}
+
 std::string Vault::dump_json() const {
     std::ostringstream ss;
     ss << "[\n";

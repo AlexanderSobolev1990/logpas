@@ -3,15 +3,19 @@
 #include "generator.h"
 #include "clipboard.h"
 #include "secure_input.h"
+#include "fs.h"
+#include "crypto.h"
+
 #include <boost/program_options.hpp>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <sodium.h>
 
 int run_cli(int argc, char** argv) {
     namespace po = boost::program_options;
 
-    po::options_description desc("Options", 120);
+    po::options_description desc("Options", 140);    
     desc.add_options()
     (
         "help,h",
@@ -41,6 +45,10 @@ int run_cli(int argc, char** argv) {
         "Использование:\n"
         "  logpas -c <site>"
     )
+    (   "search", 
+        po::value<std::string>(), 
+        "Поиск по site (частичное совпадение)"
+    )
     (
         "delete,d",
         po::value<std::string>(),
@@ -58,6 +66,10 @@ int run_cli(int argc, char** argv) {
     (
         "decrypt",
         "Расшифровать vault и сохранить JSON-файл в ~/.logpas/vault.json"
+    )
+    (   "encrypt", 
+        po::value<std::string>(), 
+        "Зашифровать указанный JSON-файл в vault с указанием НОВОГО master-пароля"
     )
     (
         "all",
@@ -117,6 +129,14 @@ int run_cli(int argc, char** argv) {
         if (e) copy_to_clipboard(e->password);
     }
 
+    if (vm.count("search")) {
+        auto result = vault.search(vm["search"].as<std::string>());
+
+        for (const auto& e : result) {
+            std::cout << e.site << std::endl;
+        }
+    }
+
     if (vm.count("delete")) {
         std::string site = vm["delete"].as<std::string>();
         vault.remove(site);
@@ -130,6 +150,44 @@ int run_cli(int argc, char** argv) {
     if (vm.count("decrypt")) {
         std::ofstream out(std::string(getenv("HOME")) + "/.logpas/vault.json");
         out << vault.dump_json();
+    }
+
+    if (vm.count("encrypt")) {
+        std::ifstream in(vm["encrypt"].as<std::string>());
+
+        if (!in) {
+            throw std::runtime_error("cannot open input file");
+        }
+
+        std::stringstream buffer;
+        buffer << in.rdbuf();
+
+        std::string pass1;
+        std::string pass2;
+
+        std::cout << "New master password: ";
+        pass1 = read_password();
+
+        std::cout << "Repeat master password: ";
+        pass2 = read_password();
+
+        if (pass1 != pass2) {
+            throw std::runtime_error("password mismatch");
+        }
+
+        auto salt = make_salt();
+        auto key = derive_key(pass1, salt);
+
+        std::vector<unsigned char> nonce;
+        std::vector<unsigned char> tag;
+
+        auto cipher = encrypt_data(buffer.str(), key, nonce, tag);
+
+        write_vault(salt, nonce, tag, cipher);
+
+        sodium_memzero(&pass1[0], pass1.size());
+        sodium_memzero(&pass2[0], pass2.size());
+        sodium_memzero(key.data(), key.size());
     }
 
     return 0;

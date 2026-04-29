@@ -12,6 +12,7 @@ public:
     bool update(const Entry& e);
     bool remove(const std::string& site);
     Entry* find(const std::string& site);
+    std::vector<Entry> search(const std::string& q) const;
     std::string dump_json() const;
 
 private:
