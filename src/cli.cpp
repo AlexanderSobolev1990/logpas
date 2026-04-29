@@ -15,7 +15,7 @@
 int run_cli(int argc, char** argv) {
     namespace po = boost::program_options;
 
-    po::options_description desc("Options", 140);    
+    po::options_description desc("Options", 220);    
     desc.add_options()
     (
         "help,h",
@@ -33,14 +33,14 @@ int run_cli(int argc, char** argv) {
     (
         "show,s",
         po::value<std::string>(),
-        "Показать login и password для указанного сайта.\n"
+        "Показать login и password для указанного site.\n"
         "Использование:\n"
         "  logpas -s <site>"
     )
     (
         "copy,c",
         po::value<std::string>(),
-        "Скопировать password для указанного сайта в буфер обмена.\n"
+        "Скопировать password для указанного site в буфер обмена.\n"
         "Буфер будет очищен через 60 секунд, если содержимое не изменилось.\n"
         "Использование:\n"
         "  logpas -c <site>"
@@ -59,7 +59,7 @@ int run_cli(int argc, char** argv) {
     (
         "update,u",
         po::value<std::vector<std::string>>()->multitoken(),
-        "Обновить существующую запись.\n"
+        "Обновить login/password для существующего site.\n"
         "Использование:\n"
         "  logpas -u <site> <login> <password>"
     )
