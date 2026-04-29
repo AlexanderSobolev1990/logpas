@@ -2,8 +2,16 @@
 #include "crypto.h"
 #include "fs.h"
 #include <sstream>
-#include <regex>
 #include <sodium.h>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static bool file_exists(const std::string& path) {
+    struct stat st;
+    return stat(path.c_str(), &st) == 0;
+}
 
 void Vault::add(const Entry& e) {
     for (auto& x : entries)
@@ -42,17 +50,47 @@ std::vector<Entry> Vault::search(const std::string& q) const {
 }
 
 std::string Vault::dump_json() const {
-    std::ostringstream ss;
-    ss << "[\n";
-    for (size_t i = 0; i < entries.size(); ++i) {
-        ss << "  {\"site\":\"" << entries[i].site
-           << "\",\"login\":\"" << entries[i].login
-           << "\",\"password\":\"" << entries[i].password << "\"}";
-        if (i + 1 < entries.size()) ss << ",";
-        ss << "\n";
+    boost::property_tree::ptree root;
+    boost::property_tree::ptree array;
+
+    try {
+        for (const auto& e : entries) {
+            if (e.site.empty()) {
+                throw std::runtime_error("empty site field");
+            }
+            if (e.login.empty()) {
+                throw std::runtime_error("empty login field");
+            }
+            if (e.password.empty()) {
+                throw std::runtime_error("empty password field");
+            }
+
+            boost::property_tree::ptree item;
+
+            item.put("site", e.site);
+            item.put("login", e.login);
+            item.put("password", e.password);
+
+            array.push_back(std::make_pair("", item));
+        }
+
+        root.add_child("entries", array);
+
+        std::ostringstream ss;
+
+        boost::property_tree::write_json(ss, root, true); // НЕ компактный формат!
+
+        if (!ss.good()) {
+            throw std::runtime_error("json serialization failed");
+        }
+
+        return ss.str();
     }
-    ss << "]";
-    return ss.str();
+    catch (const std::exception& e) {
+        throw std::runtime_error(
+            std::string("vault json build failed: ") + e.what()
+        );
+    }
 }
 
 bool Vault::save(const std::string& password) {
@@ -78,14 +116,42 @@ bool Vault::load(const std::string& password) {
 
     entries.clear();
 
-    std::regex re(
-        R"json(\{"site":"([^"]+)","login":"([^"]+)","password":"([^"]+)"\})json"
-    );
-    auto begin = std::sregex_iterator(json.begin(), json.end(), re);
-    auto end = std::sregex_iterator();
+    std::stringstream ss(json);
 
-    for (auto i = begin; i != end; ++i) {
-        entries.push_back({(*i)[1], (*i)[2], (*i)[3]});
+    boost::property_tree::ptree root;
+
+    try {
+        std::stringstream ss(json);
+
+        boost::property_tree::ptree root;
+        boost::property_tree::read_json(ss, root);
+
+        entries.clear();
+
+        for (const auto& item : root.get_child("entries")) {
+            Entry e;
+
+            e.site = item.second.get<std::string>("site");
+            e.login = item.second.get<std::string>("login");
+            e.password = item.second.get<std::string>("password");
+
+            if (e.site.empty()) {
+                throw std::runtime_error("empty site field");
+            }
+            if (e.login.empty()) {
+                throw std::runtime_error("empty login field");
+            }
+            if (e.password.empty()) {
+                throw std::runtime_error("empty password field");
+            }
+
+            entries.push_back(e);
+        }
+    }
+    catch (const std::exception& e) {
+        throw std::runtime_error(
+            std::string("vault parse failed: ") + e.what()
+        );
     }
 
     if (!json.empty()) sodium_memzero(&json[0], json.size());

@@ -99,6 +99,72 @@ int run_cli(int argc, char** argv) {
         return 0;
     }
 
+
+    if (vm.count("encrypt")) {
+        std::ifstream in(vm["encrypt"].as<std::string>());
+
+        if (!in) {
+            throw std::runtime_error("cannot open input file");
+        }
+
+        std::stringstream buffer;
+        buffer << in.rdbuf();
+
+        std::string json_data = buffer.str();
+
+        // validate json before encryption
+        try {
+            std::stringstream validate_stream(json_data);
+            boost::property_tree::ptree root;
+
+            boost::property_tree::read_json(validate_stream, root);
+
+            for (const auto& item : root.get_child("entries")) {
+                if (!item.second.count("site") ||
+                    !item.second.count("login") ||
+                    !item.second.count("password")) {
+                    throw std::runtime_error(
+                        "invalid json structure: missing fields"
+                    );
+                }
+            }
+        }
+        catch (const boost::property_tree::json_parser_error& e) {
+            throw std::runtime_error(
+                std::string("invalid input json: ") + e.message()
+            );
+        }
+
+        std::string pass1;
+        std::string pass2;
+
+        std::cout << "New master password: ";
+        pass1 = read_password();
+
+        std::cout << "Repeat new master password: ";
+        pass2 = read_password();
+
+        if (pass1 != pass2) {
+            throw std::runtime_error("password mismatch");
+        }
+
+        auto salt = make_salt();
+        auto key = derive_key(pass1, salt);
+
+        std::vector<unsigned char> nonce;
+        std::vector<unsigned char> tag;
+
+        auto cipher = encrypt_data(buffer.str(), key, nonce, tag);
+
+        write_vault(salt, nonce, tag, cipher);
+
+        sodium_memzero(&pass1[0], pass1.size());
+        sodium_memzero(&pass2[0], pass2.size());
+        sodium_memzero(key.data(), key.size());
+        return 0;
+    }
+
+    // Далее предполагается что vault.enc есть!
     Vault vault;
     std::cout << "Master password: ";
     std::string pwd = read_password();
@@ -150,44 +216,6 @@ int run_cli(int argc, char** argv) {
     if (vm.count("decrypt")) {
         std::ofstream out(std::string(getenv("HOME")) + "/.logpas/vault.json");
         out << vault.dump_json();
-    }
-
-    if (vm.count("encrypt")) {
-        std::ifstream in(vm["encrypt"].as<std::string>());
-
-        if (!in) {
-            throw std::runtime_error("cannot open input file");
-        }
-
-        std::stringstream buffer;
-        buffer << in.rdbuf();
-
-        std::string pass1;
-        std::string pass2;
-
-        std::cout << "New master password: ";
-        pass1 = read_password();
-
-        std::cout << "Repeat master password: ";
-        pass2 = read_password();
-
-        if (pass1 != pass2) {
-            throw std::runtime_error("password mismatch");
-        }
-
-        auto salt = make_salt();
-        auto key = derive_key(pass1, salt);
-
-        std::vector<unsigned char> nonce;
-        std::vector<unsigned char> tag;
-
-        auto cipher = encrypt_data(buffer.str(), key, nonce, tag);
-
-        write_vault(salt, nonce, tag, cipher);
-
-        sodium_memzero(&pass1[0], pass1.size());
-        sodium_memzero(&pass2[0], pass2.size());
-        sodium_memzero(key.data(), key.size());
     }
 
     return 0;
