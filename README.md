@@ -11,7 +11,7 @@
 Хранение паролей организовано в зашифрованном файле / Passwords are stored in encrypted file
 
 ```
-home/.logpas/vault.enc
+~/.logpas/vault.enc
 ```
 
 Файл с паролями защищен мастер-паролем, создаваемым при создании файла vault.enc / Vault file is secured by master-password, which is created at vault.enc creation time
@@ -27,7 +27,7 @@ libssl-dev
 libboost-program-options*
 ```
 
-Могут быть установлены запуском / Can be install by launching:
+Могут быть установлены запуском / Can be installed by launching:
 
 ```
 install_required.sh
@@ -40,9 +40,9 @@ install_required.sh
 ```
 Options:
   -h [ --help ]         Show help
-  -a [ --add ] arg      Add new site-login-password.
+  -a [ --add ] arg      Add new 'site' and 'login', 'password' will be asked to print.
                         Usage:
-                           logpas -a <site> <login> <password>
+                           logpas -a <site> <login>
   -s [ --show ] arg     Show 'login' and 'password' for specified 'site'.
                         Usage:
                            logpas -s <site>
@@ -54,11 +54,11 @@ Options:
   --delete arg          DELETE 'site' record.
                         Usage:
                            logpas --delete <site>
-  -u [ --update ] arg   Update 'login' and 'password' for existing 'site'.
+  -u [ --update ] arg   Update 'login' and 'password' for existing 'site', 'password' will be asked to print.
                         Usage:
-                           logpas -u <site> <login> <password>
+                           logpas -u <site> <login>
   -d [ --decrypt ]      Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json
-  -e [ --encrypt ] arg  Encrypt specified JSON file to ~/.logpas/vault.enc with specifiing new master-password.
+  -e [ --encrypt ] arg  Encrypt specified JSON file to ~/.logpas/vault.enc with specifying new master-password.
                         WARNING!!! Old vault.enc will be lost!
   -l [ --all ]          Show all records from ~/.logpas/vault.enc to terminal
   -g [ --gen ] arg      Generate password of specified length.

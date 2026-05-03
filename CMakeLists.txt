@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(logpas VERSION 1.0.0)
+project(logpas VERSION 1.1.0)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +31,7 @@ add_executable(logpas
     src/generator.cpp
     src/secure_input.h
     src/secure_input.cpp
+    src/secure_memory.h
     src/vault.h
     src/vault.cpp
 )

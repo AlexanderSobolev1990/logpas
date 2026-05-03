@@ -1,6 +1,8 @@
 #pragma once
+#include <string>
 #include <vector>
 
+std::string storage_dir();
 void ensure_storage();
 std::vector<unsigned char> make_salt();
 

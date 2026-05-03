@@ -1,6 +1,7 @@
 #include "vault.h"
 #include "crypto.h"
 #include "fs.h"
+#include "secure_memory.h"
 
 #include <sstream>
 #include <stdexcept>
@@ -120,19 +121,15 @@ std::string Vault::dump_json() const {
 bool Vault::save(const std::string& password) {
     auto salt = make_salt();
     auto key = derive_key(password, salt);
+    SecureBufferGuard key_guard(key);
 
     std::vector<unsigned char> nonce;
     std::vector<unsigned char> tag;
 
     std::string plain = dump_json();
+    SecureStringGuard plain_guard(plain);
 
     auto cipher = encrypt_data(plain, key, nonce, tag);
-
-    if (!plain.empty()) {
-        sodium_memzero(&plain[0], plain.size());
-    }
-
-    sodium_memzero(key.data(), key.size());
 
     return write_vault(salt, nonce, tag, cipher);
 }
@@ -150,55 +147,41 @@ bool Vault::load(const std::string& password) {
     }
 
     auto key = derive_key(password, salt);
+    SecureBufferGuard key_guard(key);
 
     std::string json;
+    SecureStringGuard json_guard(json);
 
-    try {
-        json = decrypt_data(cipher, key, nonce, tag);
+    json = decrypt_data(cipher, key, nonce, tag);
+    secure_clear(key);
 
-        sodium_memzero(key.data(), key.size());
+    std::stringstream ss(json);
 
-        std::stringstream ss(json);
+    boost::property_tree::ptree root;
+    boost::property_tree::read_json(ss, root);
 
-        boost::property_tree::ptree root;
-        boost::property_tree::read_json(ss, root);
+    entries.clear();
 
-        entries.clear();
+    for (const auto& item : root.get_child("entries")) {
+        Entry e;
 
-        for (const auto& item : root.get_child("entries")) {
-            Entry e;
+        e.site = item.second.get<std::string>("site");
+        e.login = item.second.get<std::string>("login");
+        e.password = item.second.get<std::string>("password");
 
-            e.site = item.second.get<std::string>("site");
-            e.login = item.second.get<std::string>("login");
-            e.password = item.second.get<std::string>("password");
-
-            if (e.site.empty()) {
-                throw std::runtime_error("empty 'site' field");
-            }
-
-            if (e.login.empty()) {
-                throw std::runtime_error("empty 'login' field");
-            }
-
-            if (e.password.empty()) {
-                throw std::runtime_error("empty 'password' field");
-            }
-
-            entries.push_back(e);
-        }
-    }
-    catch (...) {
-        sodium_memzero(key.data(), key.size());
-
-        if (!json.empty()) {
-            sodium_memzero(&json[0], json.size());
+        if (e.site.empty()) {
+            throw std::runtime_error("empty 'site' field");
         }
 
-        throw;
-    }
+        if (e.login.empty()) {
+            throw std::runtime_error("empty 'login' field");
+        }
 
-    if (!json.empty()) {
-        sodium_memzero(&json[0], json.size());
+        if (e.password.empty()) {
+            throw std::runtime_error("empty 'password' field");
+        }
+
+        entries.push_back(e);
     }
 
     return true;

@@ -3,6 +3,7 @@
 #include "generator.h"
 #include "clipboard.h"
 #include "secure_input.h"
+#include "secure_memory.h"
 #include "fs.h"
 #include "crypto.h"
 
@@ -11,8 +12,23 @@
 #include <fstream>
 #include <cstdlib>
 #include <sodium.h>
+#include <stdexcept>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+
+static std::string read_secret_twice(const std::string& prompt1,
+                                     const std::string& prompt2) {
+    std::string p1 = read_password(prompt1);
+    std::string p2 = read_password(prompt2);
+    SecureStringGuard p2_guard(p2);
+
+    if (p1 != p2) {
+        secure_clear(p1);
+        throw std::runtime_error("password mismatch");
+    }
+
+    return p1;
+}
 
 int run_cli(int argc, char** argv) {
     namespace po = boost::program_options;
@@ -26,9 +42,9 @@ int run_cli(int argc, char** argv) {
     (
         "add,a",
         po::value<std::vector<std::string>>()->multitoken(),
-        "Add new site-login-password.\n"
+        "Add new 'site' and 'login', 'password' will be asked to print.\n"
         "Usage:\n"
-        "   logpas -a <site> <login> <password>"
+        "   logpas -a <site> <login>"
     )
     (
         "show,s",
@@ -59,9 +75,9 @@ int run_cli(int argc, char** argv) {
     (
         "update,u",
         po::value<std::vector<std::string>>()->multitoken(),
-        "Update 'login' and 'password' for existing 'site'.\n"
+        "Update 'login' and 'password' for existing 'site', 'password' will be asked to print.\n"
         "Usage:\n"
-        "   logpas -u <site> <login> <password>"
+        "   logpas -u <site> <login>"
     )
     (
         "decrypt,d",
@@ -69,7 +85,7 @@ int run_cli(int argc, char** argv) {
     )
     (   "encrypt,e", 
         po::value<std::string>(), 
-        "Encrypt specified JSON file to ~/.logpas/vault.enc with specifiing new master-password.\n"
+        "Encrypt specified JSON file to ~/.logpas/vault.enc with specifying new master-password.\n"
         "WARNING!!! Old vault.enc will be lost!"
     )
     (
@@ -100,6 +116,7 @@ int run_cli(int argc, char** argv) {
         return 0;
     }
 
+    storage_dir();
 
     if (vm.count("encrypt")) {
         std::ifstream in(vm["encrypt"].as<std::string>());
@@ -112,20 +129,44 @@ int run_cli(int argc, char** argv) {
         buffer << in.rdbuf();
 
         std::string json_data = buffer.str();
+        SecureStringGuard json_guard(json_data);
 
-        // validate json before encryption
+        if (json_data.empty()) {
+            throw std::runtime_error("input json file is empty");
+        }
+
         try {
             std::stringstream validate_stream(json_data);
+
             boost::property_tree::ptree root;
 
             boost::property_tree::read_json(validate_stream, root);
 
             for (const auto& item : root.get_child("entries")) {
-                if (!item.second.count("site") ||
-                    !item.second.count("login") ||
-                    !item.second.count("password")) {
+                std::string site =
+                    item.second.get<std::string>("site");
+
+                std::string login =
+                    item.second.get<std::string>("login");
+
+                std::string password =
+                    item.second.get<std::string>("password");
+
+                if (site.empty()) {
                     throw std::runtime_error(
-                        "invalid json structure: missing fields"
+                        "invalid json structure: empty site field"
+                    );
+                }
+
+                if (login.empty()) {
+                    throw std::runtime_error(
+                        "invalid json structure: empty login field"
+                    );
+                }
+
+                if (password.empty()) {
+                    throw std::runtime_error(
+                        "invalid json structure: empty password field"
                     );
                 }
             }
@@ -136,53 +177,71 @@ int run_cli(int argc, char** argv) {
             );
         }
 
-        std::string pass1;
-        std::string pass2;
-
-        std::cout << "New master password: ";
-        pass1 = read_password();
-
-        std::cout << "Repeat new master password: ";
-        pass2 = read_password();
-
-        if (pass1 != pass2) {
-            throw std::runtime_error("password mismatch");
-        }
+        std::string pass1 = read_secret_twice(
+            "New master password: ",
+            "Repeat new master password: "
+        );
+        SecureStringGuard pass_guard(pass1);
 
         auto salt = make_salt();
         auto key = derive_key(pass1, salt);
+        SecureBufferGuard key_guard(key);
 
         std::vector<unsigned char> nonce;
         std::vector<unsigned char> tag;
 
-        auto cipher = encrypt_data(json_data, key, nonce, tag);
+        auto cipher = encrypt_data(
+            json_data,
+            key,
+            nonce,
+            tag
+        );
 
         write_vault(salt, nonce, tag, cipher);
 
-        if (!pass1.empty()) sodium_memzero(&pass1[0], pass1.size());
-        if (!pass2.empty()) sodium_memzero(&pass2[0], pass2.size());
-        sodium_memzero(key.data(), key.size());
         return 0;
     }
 
     // Далее предполагается что vault.enc есть!
     Vault vault;
-    std::cout << "Master password: ";
-    std::string pwd = read_password();
+    std::string pwd = read_password("Master password: ");
+    SecureStringGuard pwd_guard(pwd);
     vault.load(pwd);
 
     if (vm.count("add")) {
         auto v = vm["add"].as<std::vector<std::string>>();
-        if (v.size() != 3) throw std::runtime_error("need: site login password");
-        vault.add({v[0], v[1], v[2]});
+
+        if (v.size() != 2) {
+            throw std::runtime_error("need: site login");
+        }
+
+        std::string entry_password = read_secret_twice(
+            "Entry password: ",
+            "Repeat entry password: "
+        );
+        SecureStringGuard entry_password_guard(entry_password);
+
+        vault.add({v[0], v[1], entry_password});
         vault.save(pwd);
     }
 
     if (vm.count("update")) {
         auto v = vm["update"].as<std::vector<std::string>>();
-        if (v.size() != 3) throw std::runtime_error("need: site login password");
-        if (!vault.update({v[0], v[1], v[2]}))
+
+        if (v.size() != 2) {
+            throw std::runtime_error("need: site login");
+        }
+
+        std::string entry_password = read_secret_twice(
+            "New entry password: ",
+            "Repeat new entry password: "
+        );
+        SecureStringGuard entry_password_guard(entry_password);
+
+        if (!vault.update({v[0], v[1], entry_password})) {
             throw std::runtime_error("entry not found");
+        }
+
         vault.save(pwd);
     }
 
@@ -206,7 +265,11 @@ int run_cli(int argc, char** argv) {
 
     if (vm.count("delete")) {
         std::string site = vm["delete"].as<std::string>();
-        vault.remove(site);
+
+        if (!vault.remove(site)) {
+            throw std::runtime_error("entry not found");
+        }
+
         vault.save(pwd);
     }
 
@@ -215,7 +278,7 @@ int run_cli(int argc, char** argv) {
     }
 
     if (vm.count("decrypt")) {
-        std::ofstream out(std::string(getenv("HOME")) + "/.logpas/vault.json");
+        std::ofstream out(storage_dir() + "/vault.json");
         out << vault.dump_json();
     }
 
