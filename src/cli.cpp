@@ -54,12 +54,20 @@ int run_cli(int argc, char** argv) {
         "   logpas -s <site>"
     )
     (
-        "copy,c",
+        "cp",
         po::value<std::string>(),
         "Copy 'password' for specified 'site' to clipboard.\n"
         "Note: clipboard will be cleared in 60 sec.\n"
         "Usage:\n"
-        "   logpas -c <site>"
+        "   logpas --cp <site>"
+    )
+    (
+        "cl",
+        po::value<std::string>(),
+        "Copy 'login' for specified 'site' to clipboard.\n"
+        "Note: clipboard will be cleared in 60 sec.\n"
+        "Usage:\n"
+        "   logpas --cl <site>"
     )
     (   "search,r", 
         po::value<std::string>(), 
@@ -250,9 +258,14 @@ int run_cli(int argc, char** argv) {
         if (e) std::cout << e->login << "\n" << e->password << std::endl;
     }
 
-    if (vm.count("copy")) {
-        auto e = vault.find(vm["copy"].as<std::string>());
+    if (vm.count("cp")) {
+        auto e = vault.find(vm["cp"].as<std::string>());
         if (e) copy_to_clipboard(e->password);
+    }
+
+    if (vm.count("cl")) {
+        auto e = vault.find(vm["cl"].as<std::string>());
+        if (e) copy_to_clipboard(e->login);
     }
 
     if (vm.count("search")) {

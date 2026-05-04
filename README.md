@@ -46,10 +46,14 @@ Options:
   -s [ --show ] arg     Show 'login' and 'password' for specified 'site'.
                         Usage:
                            logpas -s <site>
-  -c [ --copy ] arg     Copy 'password' for specified 'site' to clipboard.
+  --cp arg              Copy 'password' for specified 'site' to clipboard.
                         Note: clipboard will be cleared in 60 sec.
                         Usage:
-                           logpas -c <site>
+                           logpas --cp <site>
+  --cl arg              Copy 'login' for specified 'site' to clipboard.
+                        Note: clipboard will be cleared in 60 sec.
+                        Usage:
+                           logpas --cl <site>
   -r [ --search ] arg   Search by 'site' field (partial match)
   --delete arg          DELETE 'site' record.
                         Usage:
