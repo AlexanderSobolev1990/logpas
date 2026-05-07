@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(logpas VERSION 1.1.1)
+project(logpas VERSION 1.1.2)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,6 +39,7 @@ add_executable(logpas
 target_include_directories(logpas PRIVATE src)
 
 target_link_libraries(logpas
+    pthread
     OpenSSL::Crypto
     Boost::program_options
     ${SODIUM_LIB}
