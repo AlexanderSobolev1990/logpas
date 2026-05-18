@@ -149,11 +149,25 @@ bool Vault::load(const std::string& password) {
     auto key = derive_key(password, salt);
     SecureBufferGuard key_guard(key);
 
+    return load_with_key(key);
+}
+
+
+bool Vault::load_with_key(const std::vector<unsigned char>& key) {
+    std::vector<unsigned char> salt;
+    std::vector<unsigned char> nonce;
+    std::vector<unsigned char> tag;
+    std::vector<unsigned char> cipher;
+
+    if (!read_vault(salt, nonce, tag, cipher)) {
+        entries.clear();
+        return true;
+    }
+
     std::string json;
     SecureStringGuard json_guard(json);
 
     json = decrypt_data(cipher, key, nonce, tag);
-    secure_clear(key);
 
     std::stringstream ss(json);
 

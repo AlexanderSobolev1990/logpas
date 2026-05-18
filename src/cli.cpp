@@ -11,10 +11,32 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
+#include <cerrno>
+#include <cstdio>
+#include <cstdint>
+#include <cstring>
+#include <ctime>
 #include <sodium.h>
 #include <stdexcept>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+
+static const int CLIPBOARD_KEY_CACHE_SECONDS = 60;
+static const char KEY_CACHE_MAGIC[] = "LPKC01";
+
+struct VaultFingerprint {
+    std::uint64_t device = 0;
+    std::uint64_t inode = 0;
+    std::uint64_t size = 0;
+    std::int64_t mtime_sec = 0;
+    std::int64_t mtime_nsec = 0;
+    std::int64_t ctime_sec = 0;
+    std::int64_t ctime_nsec = 0;
+};
 
 static std::string read_secret_twice(const std::string& prompt1,
                                      const std::string& prompt2) {
@@ -28,6 +50,201 @@ static std::string read_secret_twice(const std::string& prompt1,
     }
 
     return p1;
+}
+
+static std::string vault_path() {
+    return storage_dir() + "/vault.enc";
+}
+
+static std::string key_cache_path() {
+    return storage_dir() + "/clipboard.key";
+}
+
+static std::string key_cache_temp_path() {
+    return key_cache_path() + ".tmp." + std::to_string(getpid());
+}
+
+static bool write_all_fd(int fd, const void* data, size_t size) {
+    const unsigned char* ptr = static_cast<const unsigned char*>(data);
+
+    while (size > 0) {
+        ssize_t n = write(fd, ptr, size);
+
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return false;
+        }
+
+        if (n == 0) {
+            return false;
+        }
+
+        ptr += n;
+        size -= static_cast<size_t>(n);
+    }
+
+    return true;
+}
+
+static bool read_all_fd(int fd, void* data, size_t size) {
+    unsigned char* ptr = static_cast<unsigned char*>(data);
+
+    while (size > 0) {
+        ssize_t n = read(fd, ptr, size);
+
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+
+            return false;
+        }
+
+        if (n == 0) {
+            return false;
+        }
+
+        ptr += n;
+        size -= static_cast<size_t>(n);
+    }
+
+    return true;
+}
+
+static void clear_key_cache() {
+    unlink(key_cache_path().c_str());
+}
+
+static bool vault_fingerprint(VaultFingerprint& fingerprint) {
+    struct stat st {};
+
+    if (stat(vault_path().c_str(), &st) != 0) {
+        return false;
+    }
+
+    fingerprint.device = static_cast<std::uint64_t>(st.st_dev);
+    fingerprint.inode = static_cast<std::uint64_t>(st.st_ino);
+    fingerprint.size = static_cast<std::uint64_t>(st.st_size);
+    fingerprint.mtime_sec = static_cast<std::int64_t>(st.st_mtim.tv_sec);
+    fingerprint.mtime_nsec = static_cast<std::int64_t>(st.st_mtim.tv_nsec);
+    fingerprint.ctime_sec = static_cast<std::int64_t>(st.st_ctim.tv_sec);
+    fingerprint.ctime_nsec = static_cast<std::int64_t>(st.st_ctim.tv_nsec);
+    return true;
+}
+
+static bool same_vault_fingerprint(const VaultFingerprint& a,
+                                   const VaultFingerprint& b) {
+    return a.device == b.device &&
+           a.inode == b.inode &&
+           a.size == b.size &&
+           a.mtime_sec == b.mtime_sec &&
+           a.mtime_nsec == b.mtime_nsec &&
+           a.ctime_sec == b.ctime_sec &&
+           a.ctime_nsec == b.ctime_nsec;
+}
+
+static bool load_cached_key(std::vector<unsigned char>& key) {
+    const std::string path = key_cache_path();
+    int fd = open(path.c_str(), O_RDONLY | O_NOFOLLOW);
+
+    if (fd < 0) {
+        return false;
+    }
+
+    struct stat st {};
+
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) ||
+        st.st_uid != getuid() || (st.st_mode & 0077) != 0) {
+        close(fd);
+        clear_key_cache();
+        return false;
+    }
+
+    char magic[6];
+    std::int64_t expires = 0;
+    VaultFingerprint cached_vault {};
+    std::uint32_t key_size = 0;
+
+    bool ok = read_all_fd(fd, magic, sizeof(magic)) &&
+              read_all_fd(fd, &expires, sizeof(expires)) &&
+              read_all_fd(fd, &cached_vault, sizeof(cached_vault)) &&
+              read_all_fd(fd, &key_size, sizeof(key_size));
+
+    if (ok && (std::memcmp(magic, KEY_CACHE_MAGIC, sizeof(magic)) != 0 ||
+               key_size != crypto_aead_aes256gcm_KEYBYTES)) {
+        ok = false;
+    }
+
+    if (ok) {
+        key.assign(key_size, 0);
+        ok = read_all_fd(fd, key.data(), key.size());
+    }
+
+    close(fd);
+
+    VaultFingerprint current_vault {};
+    const std::int64_t now = static_cast<std::int64_t>(std::time(nullptr));
+
+    if (!ok || now >= expires || !vault_fingerprint(current_vault) ||
+        !same_vault_fingerprint(current_vault, cached_vault)) {
+        secure_clear(key);
+        clear_key_cache();
+        return false;
+    }
+
+    return true;
+}
+
+static void save_cached_key(const std::vector<unsigned char>& key) {
+    VaultFingerprint current_vault {};
+
+    if (!vault_fingerprint(current_vault)) {
+        return;
+    }
+
+    const std::string path = key_cache_path();
+    const std::string temp_path = key_cache_temp_path();
+
+    unlink(temp_path.c_str());
+
+    int fd = open(temp_path.c_str(),
+                  O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW,
+                  0600);
+
+    if (fd < 0) {
+        return;
+    }
+
+    const std::int64_t expires =
+        static_cast<std::int64_t>(std::time(nullptr)) +
+        CLIPBOARD_KEY_CACHE_SECONDS;
+    const std::uint32_t key_size = static_cast<std::uint32_t>(key.size());
+
+    bool ok = write_all_fd(fd, KEY_CACHE_MAGIC, 6) &&
+              write_all_fd(fd, &expires, sizeof(expires)) &&
+              write_all_fd(fd, &current_vault, sizeof(current_vault)) &&
+              write_all_fd(fd, &key_size, sizeof(key_size)) &&
+              write_all_fd(fd, key.data(), key.size());
+
+    if (fchmod(fd, 0600) != 0) {
+        ok = false;
+    }
+
+    if (close(fd) != 0) {
+        ok = false;
+    }
+
+    if (ok && rename(temp_path.c_str(), path.c_str()) != 0) {
+        ok = false;
+    }
+
+    if (!ok) {
+        unlink(temp_path.c_str());
+        clear_key_cache();
+    }
 }
 
 int run_cli(int argc, char** argv) {
@@ -206,15 +423,65 @@ int run_cli(int argc, char** argv) {
         );
 
         write_vault(salt, nonce, tag, cipher);
+        clear_key_cache();
 
         return 0;
     }
 
     // Далее предполагается что vault.enc есть!
     Vault vault;
-    std::string pwd = read_password("Master password: ");
+    std::string pwd;
     SecureStringGuard pwd_guard(pwd);
-    vault.load(pwd);
+
+    const bool clipboard_request = vm.count("cp") || vm.count("cl");
+    const bool mutating_request =
+        vm.count("add") || vm.count("update") || vm.count("delete");
+    const bool allow_key_cache = clipboard_request && !mutating_request;
+    bool vault_loaded = false;
+
+    if (allow_key_cache) {
+        std::vector<unsigned char> key;
+        SecureBufferGuard key_guard(key);
+
+        if (load_cached_key(key)) {
+            try {
+                vault.load_with_key(key);
+                vault_loaded = true;
+            }
+            catch (...) {
+                clear_key_cache();
+                secure_clear(key);
+            }
+        }
+    }
+
+    if (!vault_loaded) {
+        pwd = read_password("Master password: ");
+
+        if (allow_key_cache) {
+            std::vector<unsigned char> salt;
+            std::vector<unsigned char> nonce;
+            std::vector<unsigned char> tag;
+            std::vector<unsigned char> cipher;
+
+            if (read_vault(salt, nonce, tag, cipher)) {
+                auto key = derive_key(pwd, salt);
+                SecureBufferGuard key_guard(key);
+
+                vault.load_with_key(key);
+                save_cached_key(key);
+                vault_loaded = true;
+            }
+            else {
+                vault.load(pwd);
+                vault_loaded = true;
+            }
+        }
+        else {
+            vault.load(pwd);
+            vault_loaded = true;
+        }
+    }
 
     if (vm.count("add")) {
         auto v = vm["add"].as<std::vector<std::string>>();
@@ -231,6 +498,7 @@ int run_cli(int argc, char** argv) {
 
         vault.add({v[0], v[1], entry_password});
         vault.save(pwd);
+        clear_key_cache();
     }
 
     if (vm.count("update")) {
@@ -251,6 +519,7 @@ int run_cli(int argc, char** argv) {
         }
 
         vault.save(pwd);
+        clear_key_cache();
     }
 
     if (vm.count("show")) {
@@ -260,12 +529,18 @@ int run_cli(int argc, char** argv) {
 
     if (vm.count("cp")) {
         auto e = vault.find(vm["cp"].as<std::string>());
-        if (e) copy_to_clipboard(e->password);
+        if (e) {
+            copy_to_clipboard(e->password);
+            std::cout << "password copied to clipboard" << std::endl;
+        }
     }
 
     if (vm.count("cl")) {
         auto e = vault.find(vm["cl"].as<std::string>());
-        if (e) copy_to_clipboard(e->login);
+        if (e) {
+            copy_to_clipboard(e->login);
+            std::cout << "login copied to clipboard" << std::endl;
+        }
     }
 
     if (vm.count("search")) {
@@ -284,6 +559,7 @@ int run_cli(int argc, char** argv) {
         }
 
         vault.save(pwd);
+        clear_key_cache();
     }
 
     if (vm.count("all")) {

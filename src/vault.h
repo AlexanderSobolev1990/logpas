@@ -6,6 +6,7 @@
 class Vault {
 public:
     bool load(const std::string& password);
+    bool load_with_key(const std::vector<unsigned char>& key);
     bool save(const std::string& password);
 
     void add(const Entry& e);

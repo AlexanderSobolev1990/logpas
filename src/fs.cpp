@@ -155,8 +155,24 @@ static void fsync_dir() {
 }
 
 void ensure_storage() {
-    if (mkdir(storage_dir().c_str(), 0700) != 0 && errno != EEXIST) {
+    const std::string dir = storage_dir();
+
+    if (mkdir(dir.c_str(), 0700) != 0 && errno != EEXIST) {
         throw std::runtime_error("cannot create vault directory");
+    }
+
+    struct stat st {};
+
+    if (stat(dir.c_str(), &st) != 0) {
+        throw std::runtime_error("cannot stat vault directory");
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        throw std::runtime_error("vault path is not a directory");
+    }
+
+    if (chmod(dir.c_str(), 0700) != 0) {
+        throw std::runtime_error("cannot chmod vault directory");
     }
 }
 
