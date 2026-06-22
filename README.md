@@ -39,37 +39,39 @@ install_required.sh
 
 ```
 Options:
-  -h [ --help ]         Show help
-  -a [ --add ] arg      Add new 'site' and 'login', 'password' will be asked to print.
-                        Usage:
-                           logpas -a <site> <login>
-  -s [ --show ] arg     Show 'login' and 'password' for specified 'site'.
-                        Usage:
-                           logpas -s <site>
-  --cp arg              Copy 'password' for specified 'site' to clipboard.
-                        Note: clipboard will be cleared in 60 sec.
-                        Usage:
-                           logpas --cp <site>
-  --cl arg              Copy 'login' for specified 'site' to clipboard.
-                        Note: clipboard will be cleared in 60 sec.
-                        Usage:
-                           logpas --cl <site>
-  -r [ --search ] arg   Search by 'site' field (partial match)
-  --delete arg          DELETE 'site' record.
-                        Usage:
-                           logpas --delete <site>
-  -u [ --update ] arg   Update 'login' and 'password' for existing 'site', 'password' will be asked to print.
-                        Usage:
-                           logpas -u <site> <login>
-  -d [ --decrypt ]      Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json
-  -e [ --encrypt ] arg  Encrypt specified JSON file to ~/.logpas/vault.enc with specifying new master-password.
-                        WARNING!!! Old vault.enc will be lost!
-  -l [ --all ]          Show all records from ~/.logpas/vault.enc to terminal
-  -g [ --gen ] arg      Generate password of specified length.
-                        Valid characters:
-                           a-z A-Z 0-9 !@#$%^&*()_-+=
-                        Usage:
-                           logpas -g <length>
+  --help        Show help
+  --ver         Show version
+  --add arg     Add new 'site' and 'login', 'password' will be asked to print.
+                Usage:
+                   logpas --add <site> <login>
+  --show arg    Show 'login' and 'password' for specified 'site'.
+                Usage:
+                   logpas --show <site>
+  --cp arg      Copy 'password' for specified 'site' to clipboard.
+                Note: clipboard will be cleared in 60 sec.
+                Usage:
+                   logpas --cp <site>
+  --cl arg      Copy 'login' for specified 'site' to clipboard.
+                Note: clipboard will be cleared in 60 sec.
+                Usage:
+                   logpas --cl <site>
+  --srch arg    Search by 'site' field (partial match)
+  --del arg     DELETE 'site' record.
+                Usage:
+                   logpas --del <site>
+  --upd arg     Update 'login' and 'password' for existing 'site', 'password' will be asked to print.
+                Usage:
+                   logpas --upd <site> <login>
+  --dec         Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json
+  --enc arg     Encrypt specified JSON file to ~/.logpas/vault.enc with specifying new master-password.
+                WARNING!!! Old vault.enc will be lost!
+  --all         Show all records from ~/.logpas/vault.enc
+  --list        Show all sites from ~/.logpas/vault.enc
+  --gen arg     Generate password of specified length.
+                Valid characters:
+                   a-z A-Z 0-9 !@#$%^&*()_-+=
+                Usage:
+                   logpas --gen <length>
 
 ```
 

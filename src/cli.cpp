@@ -25,6 +25,10 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
+#ifndef LOGPAS_VERSION
+#define LOGPAS_VERSION "unknown"
+#endif
+
 static const int CLIPBOARD_KEY_CACHE_SECONDS = 60;
 static const char KEY_CACHE_MAGIC[] = "LPKC01";
 
@@ -250,25 +254,29 @@ static void save_cached_key(const std::vector<unsigned char>& key) {
 int run_cli(int argc, char** argv) {
     namespace po = boost::program_options;
 
-    po::options_description desc("Options", 220);    
+    po::options_description desc("Options", 220);
     desc.add_options()
     (
-        "help,h",
+        "help",
         "Show help"
     )
     (
-        "add,a",
+        "ver",
+        "Show version"
+    )
+    (
+        "add",
         po::value<std::vector<std::string>>()->multitoken(),
         "Add new 'site' and 'login', 'password' will be asked to print.\n"
         "Usage:\n"
-        "   logpas -a <site> <login>"
+        "   logpas --add <site> <login>"
     )
     (
-        "show,s",
+        "show",
         po::value<std::string>(),
         "Show 'login' and 'password' for specified 'site'.\n"
         "Usage:\n"
-        "   logpas -s <site>"
+        "   logpas --show <site>"
     )
     (
         "cp",
@@ -286,65 +294,86 @@ int run_cli(int argc, char** argv) {
         "Usage:\n"
         "   logpas --cl <site>"
     )
-    (   "search,r", 
-        po::value<std::string>(), 
+    (
+        "srch",
+        po::value<std::string>(),
         "Search by 'site' field (partial match)"
     )
     (
-        "delete",
+        "del",
         po::value<std::string>(),
         "DELETE 'site' record.\n"
         "Usage:\n"
-        "   logpas --delete <site>"
+        "   logpas --del <site>"
     )
     (
-        "update,u",
+        "upd",
         po::value<std::vector<std::string>>()->multitoken(),
         "Update 'login' and 'password' for existing 'site', 'password' will be asked to print.\n"
         "Usage:\n"
-        "   logpas -u <site> <login>"
+        "   logpas --upd <site> <login>"
     )
     (
-        "decrypt,d",
+        "dec",
         "Decrypt ~/.logpas/vault.enc and save it to ~/.logpas/vault.json"
     )
-    (   "encrypt,e", 
-        po::value<std::string>(), 
+    (
+        "enc",
+        po::value<std::string>(),
         "Encrypt specified JSON file to ~/.logpas/vault.enc with specifying new master-password.\n"
         "WARNING!!! Old vault.enc will be lost!"
     )
     (
-        "all,l",
+        "all",
         "Show all records from ~/.logpas/vault.enc to terminal"
     )
     (
-        "gen,g",
+        "list",
+        "Show all sites from ~/.logpas/vault.enc"
+    )
+    (
+        "gen",
         po::value<int>(),
         "Generate password of specified length.\n"
         "Valid characters:\n"
         "   a-z A-Z 0-9 !@#$%^&*()_-+=\n"
         "Usage:\n"
-        "   logpas -g <length>"
+        "   logpas --gen <length>"
     );
 
+    const int command_line_style =
+        po::command_line_style::default_style &
+        ~po::command_line_style::allow_guessing;
+
     po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::store(
+        po::command_line_parser(argc, argv)
+            .options(desc)
+            .style(command_line_style)
+            .run(),
+        vm
+    );
     po::notify(vm);
 
     if (vm.count("help") || argc == 1) {
         std::cout << desc << std::endl;
-        return 0;
+        return EXIT_SUCCESS;
+    }
+
+    if (vm.count("ver")) {
+        std::cout << LOGPAS_VERSION << std::endl;
+        return EXIT_SUCCESS;
     }
 
     if (vm.count("gen")) {
         std::cout << generate_password(vm["gen"].as<int>()) << std::endl;
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     storage_dir();
 
-    if (vm.count("encrypt")) {
-        std::ifstream in(vm["encrypt"].as<std::string>());
+    if (vm.count("enc")) {
+        std::ifstream in(vm["enc"].as<std::string>());
 
         if (!in) {
             throw std::runtime_error("cannot open input file");
@@ -425,7 +454,7 @@ int run_cli(int argc, char** argv) {
         write_vault(salt, nonce, tag, cipher);
         clear_key_cache();
 
-        return 0;
+        return EXIT_SUCCESS;
     }
 
     // Далее предполагается что vault.enc есть!
@@ -435,7 +464,7 @@ int run_cli(int argc, char** argv) {
 
     const bool clipboard_request = vm.count("cp") || vm.count("cl");
     const bool mutating_request =
-        vm.count("add") || vm.count("update") || vm.count("delete");
+        vm.count("add") || vm.count("upd") || vm.count("del");
     const bool allow_key_cache = clipboard_request && !mutating_request;
     bool vault_loaded = false;
 
@@ -501,8 +530,8 @@ int run_cli(int argc, char** argv) {
         clear_key_cache();
     }
 
-    if (vm.count("update")) {
-        auto v = vm["update"].as<std::vector<std::string>>();
+    if (vm.count("upd")) {
+        auto v = vm["upd"].as<std::vector<std::string>>();
 
         if (v.size() != 2) {
             throw std::runtime_error("need: site login");
@@ -543,16 +572,16 @@ int run_cli(int argc, char** argv) {
         }
     }
 
-    if (vm.count("search")) {
-        auto result = vault.search(vm["search"].as<std::string>());
+    if (vm.count("srch")) {
+        auto result = vault.search(vm["srch"].as<std::string>());
 
         for (const auto& e : result) {
             std::cout << e.site << std::endl;
         }
     }
 
-    if (vm.count("delete")) {
-        std::string site = vm["delete"].as<std::string>();
+    if (vm.count("del")) {
+        std::string site = vm["del"].as<std::string>();
 
         if (!vault.remove(site)) {
             throw std::runtime_error("entry not found");
@@ -566,10 +595,18 @@ int run_cli(int argc, char** argv) {
         std::cout << vault.dump_json() << std::endl;
     }
 
-    if (vm.count("decrypt")) {
+    if (vm.count("list")) {
+        auto result = vault.search("");
+
+        for (const auto& e : result) {
+            std::cout << e.site << std::endl;
+        }
+    }
+
+    if (vm.count("dec")) {
         std::ofstream out(storage_dir() + "/vault.json");
         out << vault.dump_json();
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

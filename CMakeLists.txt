@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.7)
 
-project(logpas VERSION 1.1.3)
+project(logpas VERSION 1.2.0)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,10 @@ add_executable(logpas
 )
 
 target_include_directories(logpas PRIVATE src)
+
+target_compile_definitions(logpas PRIVATE
+    LOGPAS_VERSION="${PROJECT_VERSION}"
+)
 
 target_link_libraries(logpas
     pthread
