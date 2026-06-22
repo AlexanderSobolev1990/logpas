@@ -583,6 +583,17 @@ int run_cli(int argc, char** argv) {
     if (vm.count("del")) {
         std::string site = vm["del"].as<std::string>();
 
+        std::cerr << "WARNING: record will be permanently DELETED!"
+                  << std::endl;
+
+        std::string confirm_pwd =
+            read_password("Repeat master password: ");
+        SecureStringGuard confirm_pwd_guard(confirm_pwd);
+
+        if (confirm_pwd != pwd) {
+            throw std::runtime_error("master password mismatch");
+        }
+
         if (!vault.remove(site)) {
             throw std::runtime_error("entry not found");
         }
