@@ -1,11 +1,11 @@
-#include "cli.h"
-#include "vault.h"
-#include "generator.h"
-#include "clipboard.h"
-#include "secure_input.h"
-#include "secure_memory.h"
-#include "fs.h"
-#include "crypto.h"
+#include "cli.hpp"
+#include "vault.hpp"
+#include "generator.hpp"
+#include "clipboard.hpp"
+#include "secure_input.hpp"
+#include "secure_memory.hpp"
+#include "fs.hpp"
+#include "crypto.hpp"
 
 #include <boost/program_options.hpp>
 #include <iostream>

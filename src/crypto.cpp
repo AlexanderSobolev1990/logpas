@@ -1,5 +1,5 @@
-#include "crypto.h"
-#include "secure_memory.h"
+#include "crypto.hpp"
+#include "secure_memory.hpp"
 
 #include <openssl/evp.h>
 #include <sodium.h>

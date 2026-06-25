@@ -1,4 +1,4 @@
-#include "secure_input.h"
+#include "secure_input.hpp"
 #include <termios.h>
 #include <unistd.h>
 #include <iostream>

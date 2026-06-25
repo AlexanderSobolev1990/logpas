@@ -1,4 +1,4 @@
-#include "generator.h"
+#include "generator.hpp"
 #include <sodium.h>
 
 std::string generate_password(size_t len) {

@@ -6,7 +6,7 @@
 
 Простой консольный менеджер паролей / Simple terminal login-password manager
 
-Предполагается, что у вас ubuntu-подобный дистрибутив и есть директория /home / Suppose you have ubuntu-like distro and has /home dir
+Предполагается, что у вас Astra Linux 1.6-1.8, Ubuntu 22.04+ или другой Debian/Ubuntu-подобный дистрибутив и есть директория /home / Suppose you have Astra Linux 1.6-1.8, Ubuntu 22.04+ or another Debian/Ubuntu-like distro and has /home dir
 
 Хранение паролей организовано в зашифрованном файле / Passwords are stored in encrypted file
 
@@ -22,9 +22,11 @@
 
 ```
 xclip 
+xsel (optional clipboard fallback)
+wl-clipboard (optional Wayland clipboard support)
 libsodium-dev 
 libssl-dev
-libboost-program-options*
+libboost-program-options-dev
 ```
 
 Могут быть установлены запуском / Can be installed by launching:

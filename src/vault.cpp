@@ -1,7 +1,7 @@
-#include "vault.h"
-#include "crypto.h"
-#include "fs.h"
-#include "secure_memory.h"
+#include "vault.hpp"
+#include "crypto.hpp"
+#include "fs.hpp"
+#include "secure_memory.hpp"
 
 #include <sstream>
 #include <stdexcept>

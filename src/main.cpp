@@ -1,4 +1,4 @@
-#include "cli.h"
+#include "cli.hpp"
 #include <sodium.h>
 #include <csignal>
 #include <cstdlib>
